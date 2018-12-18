@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Cliente Dropbox</title>
+	<link rel="shortcut icon" href="./../images/image_bo/logo_2.png">
+	<link rel="stylesheet" href="./../styles.css">
+	
+	<script src="//cdn.jsdelivr.net/npm/promise-polyfill@7/dist/polyfill.min.js"></script>
+  <script src="//cdnjs.cloudflare.com/ajax/libs/fetch/2.0.3/fetch.js"></script>
+  <script src="./../src/Dropbox-sdk.min.js"></script>
+	<script src="./../utils.js"></script>
+
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.6.1/css/all.css" integrity="sha384-gfdkjb5BdAXd+lj+gudLWI+BXq4IuLW5IT+brZEZsLFm++aCMlF1V92rMkPaX4PP" crossorigin="anonymous">
+
+</head>
+<body>
+  <!-- Example layout boilerplate -->
+  <header class="page-header" style="height:110px;">
+    <div class="container" style="height:110px;">
+      <nav>
+				<a href="/#">
+          <h1>
+						<img src="https://cfl.dropboxstatic.com/static/images/brand/logotype_white-vflRG5Zd8.svg" class="logo" />
+						Trabajo SSR 2018 Grupo Tardes
+          </h1>
+        </a>
+		
+			<button type="button" onclick="cerrarSesion();">Cerrar sesion</button>
+		
+      </nav>
+      <h2 class="code">
+        <b>UN CLIENTE DROPBOX</b>
+      </h2>
+    </div>
+  </header>
+
+  <div class="container main">
+	  <div id="contenido" style="float:left; width:80%;">  
+			<div id="anyadir_archivo">
+				<form onSubmit="return uploadFile()">
+					<input type="file" id="file-upload"/>
+					<button type="submit">Subir archivo</button>
+				</form>
+			</div>
+			<hr>
+			<div id="lista_archivos" style="display:block;">
+				<p><b>Lista de archivos recuperados con el token de acceso.</b></p>
+				<div id="files"></div>
+			</div>
+	  </div>
+	  <div id="menu" style="float:right; width:20%;margin-top: 100px;">
+			<button type="button" class="link" onclick="downloadFile();"><i class="fa fa-download"></i> Descargar archivo</button>
+			<button type="button" class="link" onclick="eliminarArchivo();"><i class="fa fa-trash-alt"></i> Eliminar archivo</button>
+		</div>
+		<!-- The download button is added here -->
+		<div id="results" style="margin-top: 30px"></div>
+  </div>
+
+  <script>
+	var filesContainer = document.getElementById('files');
+	
+	// Render a list of items to #files
+    function renderItems(items) {
+      var list_files = '';
+	  items.forEach(function(item) {
+						/*var li = document.createElement('li');
+						li.innerHTML = item.name;
+						filesContainer.appendChild(li);*/
+						list_files += '<input type="radio" id="'+item.name+'" name="list_files" value="'+item.name+'"><label for="'+item.name+'">'+item.name+'</label><br>';
+					});
+	  filesContainer.innerHTML=list_files;
+	}
+	
+	// Parses the url and gets the access token if it is in the urls hash
+    function getAccessTokenFromUrl() {
+     return utils.parseQueryString(window.location.hash).access_token;
+    }
+	
+	
+	// Create an instance of Dropbox with the access token and use it to
+	// fetch and render the files in the users root directory.
+	  var dbx = new Dropbox.Dropbox({ accessToken: getAccessTokenFromUrl() });
+	  dbx.filesListFolder({path: ''})
+		.then(function(response) {
+		  renderItems(response.entries);
+		})
+		.catch(function(error) {
+		  console.error(error);
+		});
+		
+		function recargarItems(){
+			 //vaciamos la lista de items
+			 filesContainer.innerHTML='';
+			 //cargamos la lista de items
+			 dbx.filesListFolder({path: ''})
+				.then(function(response) {
+				  renderItems(response.entries);
+				})
+				.catch(function(error) {
+				  console.error(error);
+				});
+		}
+		
+		function obtenerItemValue(){
+			var items = document.getElementsByName('list_files');
+			var itemValue;
+			for (var i = 0, length = items.length; i < length; i++) {
+				if (items[i].checked) {
+					itemValue = items[i].value;
+					return itemValue;
+				}
+			}
+			return null;
+		}
+		
+		function uploadFile(){
+			var fileInput = document.getElementById('file-upload');
+			if (fileInput.files.length == 0)
+				alert('Hay que seleccionar antes un archivo');
+				var file = fileInput.files[0];
+				dbx.filesUpload({path: '/' + file.name, contents: file})
+          			    .catch(function(error) {
+            				console.error(error);
+          			    });
+          		alert('Su archivo :'+ file.name + ' se ha subido correctamente. :)');
+			    recargarItems();
+		}
+		
+		function downloadFile(){
+			var itemValue = obtenerItemValue();
+			
+			if (itemValue == null)
+				alert('Hay que seleccionar antes un archivo');
+			else{
+				
+				dbx.filesDownload({path: '/' + itemValue})
+				
+					.then(function(data) {
+						var downloadUrl = URL.createObjectURL(data.fileBlob);
+						//window.location.href = downloadUrl;
+
+						//alert('Archivo a descargado: ' + itemValue);
+						var downloadButton = document.createElement('a');
+						downloadButton.setAttribute('href', downloadUrl);
+						downloadButton.setAttribute('download', data.name);
+						downloadButton.setAttribute('class', 'button');
+						downloadButton.innerText = 'Download: ' + data.name;
+						document.getElementById('results').appendChild(downloadButton);
+						
+					})
+					.catch(function(err) {
+					console.log(err);
+					callback('Error de descarga del archivo usando la API Dropbox');
+					});
+				
+				recargarItems();
+			}
+		}
+		
+		function eliminarArchivo(){
+			var itemValue = obtenerItemValue();
+			if (itemValue == null)
+				alert('Hay que seleccionar antes un archivo');
+			else{
+				var c = confirm("¿Seguro que quieres eliminar el archivo: " + itemValue + "?" );
+				if (c) dbx.filesDelete({path: '/' + itemValue})
+					.then(function(){
+						recargarItems();
+					});
+				//dbx.filesDelete({path: '/' + itemValue});
+				//alert('eliminarArchivo '+obtenerItemValue());			
+				//window.setTimeout(, 500);
+			}
+		}
+		
+		function cerrarSesion(){
+			alert('Cerrar Sesion');
+			
+			//IMPLEMENTAR RESTO FUNCIONALIDAD JUAN U OTRO SI NO ES MUY COMPLICADO
+			function delete_cookie(name) {
+				document.cookie = name +'=; Path=/*; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
+			}
+			delete_cookie('__cfduid');
+			window.location.replace('https://www.dropbox.com/logout');
+			window.location.replace('http://localhost:8080/index.html');
+		}
+  </script>
+</body>
+</html>
